@@ -1392,7 +1392,8 @@
     return {
       el: tip,
       show: function (html, mx, my) {
-        tip.innerHTML = html;
+        /* 提示内容里有来自用户数据的名字（哑铃图行名、平行坐标维度名），统一过白名单 */
+        tip.innerHTML = window.ADV_SANITIZE ? window.ADV_SANITIZE(html) : html;
         tip.style.opacity = 1;
         var w = tip.offsetWidth, h = tip.offsetHeight;
         var lx = mx + 16, ly = my - h - 12;
@@ -3898,10 +3899,11 @@
     data.cards.forEach(function (card) {
       var cardEl = document.createElement('div');
       cardEl.className = 'kpi-card';
+      /* label/value/delta 全部来自分享链接里的 cfg JSON，必须转义后再拼 HTML */
       cardEl.innerHTML =
-        '<div class="kpi-label">' + DT(card.label) + '</div>' +
-        '<div class="kpi-value">' + DT(card.value) + '</div>' +
-        '<div class="kpi-delta ' + card.dir + '">' + card.delta + '</div>' +
+        '<div class="kpi-label">' + escHtml(DT(card.label)) + '</div>' +
+        '<div class="kpi-value">' + escHtml(DT(card.value)) + '</div>' +
+        '<div class="kpi-delta ' + (card.dir === 'neg' ? 'neg' : card.dir === 'pos' ? 'pos' : '') + '">' + escHtml(card.delta) + '</div>' +
         '<div class="kpi-spark"></div>';
       grid.appendChild(cardEl);
     });
@@ -4702,14 +4704,15 @@
       var cls = 'pv-th';
       if (c === timeCol) cls += ' pv-x';
       else if (state.mapping.yCols.indexOf(c) >= 0) cls += ' pv-y';
-      html += '<th class="' + cls + '" data-col="' + c + '" title="' + (c === timeCol ? 'X / 时间列' : '点击选择/取消该列作为 Y 数值') + '">' + c + '</th>';
+      /* 列名来自用户上传的文件，属性值和文本都要转义 */
+      html += '<th class="' + cls + '" data-col="' + escHtml(c) + '" title="' + (c === timeCol ? 'X / 时间列' : '点击选择/取消该列作为 Y 数值') + '">' + escHtml(c) + '</th>';
     });
     html += '</tr></thead><tbody>';
     table.rows.slice(0, 60).forEach(function (r) {
       html += '<tr>';
       table.columns.forEach(function (c) {
         var cls = (c === timeCol) ? 'pv-x' : ((state.mapping.yCols.indexOf(c) >= 0) ? 'pv-y' : '');
-        html += '<td class="' + cls + '">' + fmt2(r[c]) + '</td>';
+        html += '<td class="' + cls + '">' + escHtml(fmt2(r[c])) + '</td>';
       });
       html += '</tr>';
     });
@@ -5609,14 +5612,15 @@
       var typeName = TYPE_LABELS[type] || '表格';
       var meta = ds.rows.length + ' 行 × ' + ds.columns.length + ' 列';
       if (det.ohlc) meta += ' · 已识别 OHLC K线';
-      else if (det.isTimeSeries) meta += ' · 时间列：' + det.timeCol;
+      else if (det.isTimeSeries) meta += ' · 时间列：' + escHtml(det.timeCol);
       var nums = det.numericCols.filter(function (c) { return c !== det.timeCol; });
-      if (nums.length) meta += ' · 数值：' + nums.slice(0, 3).join('、') + (nums.length > 3 ? '…' : '');
+      if (nums.length) meta += ' · 数值：' + nums.slice(0, 3).map(escHtml).join('、') + (nums.length > 3 ? '…' : '');
 
       var card = document.createElement('div');
       card.className = 'dataset-card';
+      /* 表名 / 列名都来自用户上传的文件，拼 HTML 前必须转义 */
       card.innerHTML =
-        '<div class="ds-head"><span class="ds-name">' + ds.name + '</span>' +
+        '<div class="ds-head"><span class="ds-name">' + escHtml(ds.name) + '</span>' +
         '<span class="ds-badge">' + typeName + '</span></div>' +
         '<div class="ds-meta">' + meta + '</div>' +
         '<div class="ds-actions"><button class="btn sm" data-render="' + i + '">渲染此表</button></div>';
@@ -5704,7 +5708,7 @@
       var panel = document.createElement('div');
       panel.className = 'dash-panel';
       panel.innerHTML =
-        '<div class="dash-panel-head"><span class="dash-panel-title">' + ds.name + '</span>' +
+        '<div class="dash-panel-head"><span class="dash-panel-title">' + escHtml(ds.name) + '</span>' +
         '<span class="ds-badge">' + (TYPE_LABELS[chart.type] || chart.type) + '</span></div>' +
         '<div class="dash-panel-body"></div>';
       grid.appendChild(panel);
@@ -5868,9 +5872,9 @@
     var tbl = el('tf-preview');
     if (!tbl) return;
     var t = state.tfTable;
-    var html = '<thead><tr>' + t.columns.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
+    var html = '<thead><tr>' + t.columns.map(function (c) { return '<th>' + escHtml(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
     t.rows.slice(0, 8).forEach(function (r) {
-      html += '<tr>' + t.columns.map(function (c) { return '<td>' + fmt2(r[c]) + '</td>'; }).join('') + '</tr>';
+      html += '<tr>' + t.columns.map(function (c) { return '<td>' + escHtml(fmt2(r[c])) + '</td>'; }).join('') + '</tr>';
     });
     tbl.innerHTML = html + '</tbody>';
   }

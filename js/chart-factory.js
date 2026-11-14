@@ -16,6 +16,60 @@
     return String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g, function (c) { return ESC_MAP[c]; });
   }
 
+  /* tooltip 是 HTML 渲染，formatter 的返回值会直接进 innerHTML。formatter 分散在
+     chart-factory / chart-extra / showcase 三个文件里（chart-extra 里还有重复定义的图表），
+     逐个手工转义容易漏，这里在交给 ECharts 之前统一过一次白名单：只留排版标签和
+     style/class 等属性，img/script/svg/on* 之类全部丢掉。 */
+  var TIP_TAGS = { DIV: 1, SPAN: 1, BR: 1, B: 1, I: 1, EM: 1, STRONG: 1, SMALL: 1, P: 1, HR: 1, TABLE: 1, THEAD: 1, TBODY: 1, TR: 1, TD: 1, TH: 1, UL: 1, OL: 1, LI: 1 };
+  var TIP_ATTRS = { style: 1, class: 1, color: 1, colspan: 1, rowspan: 1, align: 1 };
+
+  function sanitizeHtml(input) {
+    if (input === null || input === undefined) return '';
+    var html = String(input);
+    if (html.indexOf('<') < 0 && html.indexOf('&') < 0) return html;
+    var doc;
+    try { doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html'); }
+    catch (e) { return ex(html); }
+    (function walk(node) {
+      Array.prototype.slice.call(node.childNodes).forEach(function (child) {
+        if (child.nodeType === 1) {
+          if (!TIP_TAGS[child.tagName]) {
+            // 白名单外的标签整体降级成纯文字（DOMParser 的文档没有浏览上下文，不会真的去加载 img）
+            var text = doc.createTextNode(child.textContent || '');
+            if (child.parentNode) child.parentNode.replaceChild(text, child);
+            return;
+          }
+          Array.prototype.slice.call(child.attributes).forEach(function (attr) {
+            if (!TIP_ATTRS[attr.name.toLowerCase()]) child.removeAttribute(attr.name);
+          });
+          walk(child);
+        } else if (child.nodeType !== 3) {
+          if (child.parentNode) child.parentNode.removeChild(child);
+        }
+      });
+    })(doc.body);
+    return doc.body.innerHTML;
+  }
+
+  function hardenTooltip(tt) {
+    if (!tt) return;
+    (Array.isArray(tt) ? tt : [tt]).forEach(function (t) {
+      if (!t || typeof t.formatter !== 'function') return;
+      var f = t.formatter;
+      t.formatter = function (p) {
+        var out = f.apply(this, arguments);
+        return typeof out === 'string' ? sanitizeHtml(out) : out;
+      };
+    });
+  }
+
+  function hardenTooltips(option) {
+    if (!option) return option;
+    hardenTooltip(option.tooltip);
+    (option.series || []).forEach(function (s) { if (s && typeof s === 'object') hardenTooltip(s.tooltip); });
+    return option;
+  }
+
   function hexToRgba(hex, alpha) {
     if (hex[0] === '#') hex = hex.slice(1);
     if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
@@ -1495,7 +1549,7 @@
       option.animationDurationUpdate = 400;
     }
     var inst = echarts.getInstanceByDom(el) || echarts.init(el);
-    inst.setOption(option, true);
+    inst.setOption(hardenTooltips(option), true);
     instances.push(inst);
     return inst;
   }
@@ -1517,5 +1571,7 @@
     instances.forEach(function (i) { try { i.resize(); } catch (e) {} });
   }
 
-  global.ChartFactory = { render: render, renderKpiSpark: renderKpiSpark, disposeAll: disposeAll, resizeAll: resizeAll, BUILDERS: BUILDERS, setWatermark: setWatermark, hexToRgba: hexToRgba, setEvents: setEvents, eventStyle: eventStyle, localizeOption: localizeOption };
+  global.ChartFactory = { render: render, renderKpiSpark: renderKpiSpark, disposeAll: disposeAll, resizeAll: resizeAll, BUILDERS: BUILDERS, setWatermark: setWatermark, hexToRgba: hexToRgba, setEvents: setEvents, eventStyle: eventStyle, localizeOption: localizeOption, sanitizeHtml: sanitizeHtml };
+  /* 其他文件（app.js 的悬浮提示、showcase.js 的 D3 提示框）复用同一套白名单 */
+  global.ADV_SANITIZE = sanitizeHtml;
 })(window);

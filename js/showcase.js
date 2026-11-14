@@ -49,7 +49,8 @@
     el.appendChild(tip);
     return {
       show: function (html, x, y) {
-        tip.innerHTML = html;
+        /* 图上节点/区域的名字来自用户数据（含分享链接），拼进提示框前统一过白名单 */
+        tip.innerHTML = global.ADV_SANITIZE ? global.ADV_SANITIZE(html) : html;
         tip.style.opacity = 1;
         var w = tip.offsetWidth, h = tip.offsetHeight;
         var lx = x + 14, ly = y - h - 10;
@@ -595,7 +596,7 @@
         var txt = '<b>' + fromLabel + ' → ' + toLabel + '</b>';
         if (e.label) txt += '<br/><span style="color:#8E8E93;letter-spacing:.1em">' + e.label + '</span>';
         if (e.dashed) txt += '<br/><span style="color:#A6A6AA;font-size:10.5px">异步 / 非阻塞</span>';
-        tip.innerHTML = txt;
+        tip.innerHTML = global.ADV_SANITIZE ? global.ADV_SANITIZE(txt) : txt;
         tip.style.opacity = 1;
       });
       hit.on('mousemove', function (ev) {
